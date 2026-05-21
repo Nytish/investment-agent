@@ -1,0 +1,9 @@
+export const getUserProfile = jest.fn().mockResolvedValue(null);
+export const savePortfolio = jest.fn().mockResolvedValue(undefined);
+export const saveNotification = jest.fn().mockResolvedValue(undefined);
+export const getPortfolio = jest.fn().mockResolvedValue(null);
+export const getRecentNotifications = jest.fn().mockResolvedValue([]);
+export const getNotificationSettings = jest.fn().mockResolvedValue(null);
+export const getDb = jest.fn();
+export const isFirestoreAvailable = jest.fn().mockReturnValue(false);
+export const initFirebase = jest.fn();

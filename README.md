@@ -1,85 +1,159 @@
-# AI Investment Co-pilot
+# AI Investment Agent
 
-Personal AI financial agent for Nitish Bidwe.
-Built on: Gemini 2.0 Flash + Firebase + TypeScript.
+> Personal AI Investment Co-pilot for Nitish Bidwe — Ingolstadt, Bavaria
+
+![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue) ![Node](https://img.shields.io/badge/Node-20%2B-green) ![Gemini](https://img.shields.io/badge/Gemini-2.5_Flash-orange) ![Firebase](https://img.shields.io/badge/Firebase-Firestore-yellow)
+
+---
+
+## Features
+
+- Conversational portfolio management via CLI or Web UI
+- Portfolio gap analysis against target allocation (80% ETF core / 20% satellite)
+- FIRE planning with Monte Carlo simulation (target: €600k by age 47)
+- German tax corner: Vorabpauschale calculator, Freistellungsauftrag tracker, Elster guide
+- Rebalancing alerts with drift detection per holding
+- Scheduled Cloud Function notifications (tax deadlines, rebalancing, Vorabpauschale)
+- Persistent holdings and insights stored in Firebase Firestore
 
 ---
 
 ## Quick Start
 
-### 1. Set up Firebase credentials (one-time)
-
-Option A — Application Default Credentials (recommended):
 ```bash
-gcloud auth application-default login
-```
+# 1. Clone and install
+git clone https://github.com/Nytish/investment-agent.git
+cd investment-agent
+npm install
 
-Option B — Service account key:
-- Go to: Firebase Console → Project Settings → Service Accounts
-- Click "Generate new private key" → download JSON
-- Save as `serviceAccount.json` in project root
-- Uncomment `FIREBASE_SERVICE_ACCOUNT_PATH` in `.env`
+# 2. Configure environment
+cp .env.example .env
+# Edit .env — fill in GEMINI_API_KEY and FIREBASE_PROJECT_ID
 
-### 2. Deploy Firestore rules (one-time)
-```bash
-firebase login
-firebase use financialaiagent-809ee
-firebase deploy --only firestore:rules
-```
-
-### 3. Start the agent
-```bash
-npm start
+# 3. Launch
+npm run serve        # Web UI at http://localhost:3000
+# or
+npm start            # CLI mode
 ```
 
 ---
 
-## Example questions
+## Commands
+
+| Command              | Description                           |
+|----------------------|---------------------------------------|
+| `npm start`          | Interactive CLI agent session         |
+| `npm run serve`      | Web UI server on localhost:3000       |
+| `npm run build`      | Compile TypeScript to dist/           |
+| `npm run typecheck`  | Type-check without emitting files     |
+
+---
+
+## Tool Inventory (19 tools)
+
+### Portfolio & Analysis
+
+| Tool                       | Description                                       |
+|----------------------------|---------------------------------------------------|
+| `getFinancialProfile`      | Return Nitish's full financial DNA snapshot       |
+| `runGapAnalysis`           | Compare current allocation to target, flag gaps   |
+| `generatePortfolioOptions` | Suggest ETF/asset options to fill identified gaps |
+| `runMonteCarlo`            | Simulate FIRE scenarios (1000+ runs)              |
+| `checkRebalancing`         | Detect drift in holdings vs. target weights       |
+| `calculateAfterTaxReturn`  | Net return after Abgeltungsteuer + Soli           |
+
+### Holdings
+
+| Tool                   | Description                             |
+|------------------------|-----------------------------------------|
+| `getPortfolioHoldings` | Fetch all holdings from Firestore       |
+| `addPortfolioHolding`  | Add a new holding with value and ticker |
+| `updateHoldingValue`   | Update current market value of holding  |
+| `deleteHolding`        | Remove a holding from the portfolio     |
+
+### Insights
+
+| Tool                    | Description                                       |
+|-------------------------|---------------------------------------------------|
+| `generateWeeklyInsight` | Generate and persist a weekly portfolio insight   |
+| `getLatestInsight`      | Retrieve the most recent stored insight           |
+
+### Notifications
+
+| Tool                       | Description                                |
+|----------------------------|--------------------------------------------|
+| `getNotifications`         | List pending notifications                 |
+| `markNotificationRead`     | Mark a notification as read               |
+| `getNotificationSettings`  | Retrieve user notification preferences    |
+| `logNotification`          | Write a new notification to Firestore     |
+
+### German Tax Corner
+
+| Tool                            | Description                                        |
+|---------------------------------|----------------------------------------------------|
+| `calculateVorabpauschale`       | Compute annual prepaid capital gains tax           |
+| `calculateFreistellungsauftrag` | Track FSA usage against €1,000 allowance           |
+| `getTaxDeadlines`               | List relevant German tax deadlines for the year    |
+| `getElsterGuide`                | Step-by-step Elster filing instructions            |
+| `getTaxYearSummary`             | Full tax summary for a given calendar year         |
+
+---
+
+## Architecture
 
 ```
-"What should I invest this month?"
-"Am I on track for FIRE at 47?"
-"Should I rebalance my portfolio?"
-"What's my Vorabpauschale for 2026?"
-"How much do I save in tax with accumulating vs distributing ETFs?"
-"Compare VWCE vs IWDA+IS3N split"
-"How long until I hit 25% of my FIRE goal?"
-"What happens if markets drop 30% next year?"
+  CLI (npm start)          Web UI (npm run serve)
+       |                          |
+       +-----------+--------------+
+                   |
+           InvestmentAgent
+           (Gemini 2.5 Flash)
+                   |
+     +-------------+-------------+
+     |             |             |
+ HoldingTools  InsightTools  TaxTools
+ NotifTools    PortfolioTools
+     |             |             |
+     +-------------+-------------+
+                   |
+         +---------+---------+
+         |      Engines       |
+         |  MonteCarloEngine  |
+         |  GapAnalysisEngine |
+         |  PortfolioEngine   |
+         |  TaxEngine         |
+         +--------+-----------+
+                  |
+         +--------+-----------+
+         |   Firebase          |
+         |   Firestore         |
+         |  (holdings,         |
+         |   insights,         |
+         |   notifications)    |
+         +--------------------+
+                  ^
+         Cloud Functions
+         (scheduled notifications:
+          rebalancing, Vorabpauschale,
+          tax deadlines, weekly insight)
 ```
 
 ---
 
-## Project structure
+## German Tax Features
 
-```
-src/
-  index.ts                  ← CLI entry point (npm start)
-  agent/
-    InvestmentAgent.ts      ← Gemini tool-calling loop
-    tools.ts                ← 9 financial tools (declarations + executors)
-    prompts.ts              ← System prompt with full Financial DNA
-  engines/
-    GapAnalysisEngine.ts    ← Debt, emergency fund, tax gap checks
-    PortfolioEngine.ts      ← Conservative/Balanced/Growth allocations
-    MonteCarloEngine.ts     ← 1000-simulation probability calculator
-    TaxEngine.ts            ← Vorabpauschale, Freistellungsauftrag
-  models/
-    UserProfile.ts          ← Financial DNA types
-    Portfolio.ts            ← Portfolio + ETF catalogue types
-    Notification.ts         ← 7 notification types
-  services/
-    FirestoreService.ts     ← Firestore CRUD
-    SeedData.ts             ← Pre-populated Financial DNA (onboarding data)
-  notifications/
-    NotificationTriggers.ts ← 7 notification generators
-
-functions/                  ← Firebase Cloud Functions (scheduled notifications)
-  src/index.ts              ← 4 scheduled triggers (monthly, tax, weekly)
-```
+| Feature                   | Detail                                                         |
+|---------------------------|----------------------------------------------------------------|
+| Vorabpauschale            | Annual calculation based on Basiszins + fund value             |
+| Freistellungsauftrag      | Tracks usage of the €1,000/year tax-free allowance             |
+| Abgeltungsteuer           | 25% flat tax + 5.5% Soli surcharge on capital gains            |
+| Elster guide              | Step-by-step instructions for KAP Anlage (investment income)   |
+| Tax year summary          | Aggregated view of gains, FSA consumed, tax owed               |
+| Deadline reminders        | Automated Cloud Function alerts for key German tax dates       |
 
 ---
 
-## Deploy scheduled notifications
+## Deploy Scheduled Notifications
 
 ```bash
 cd functions
@@ -89,31 +163,24 @@ firebase deploy --only functions
 ```
 
 Scheduled triggers:
-- 3rd of month, 9AM → contribution reminder
-- July 1st, 9AM → tax deadline (30 days before July 31)
-- January 1st, 8AM → Vorabpauschale notice
-- Every Monday, 9AM → weekly insight
+- 3rd of month, 9 AM — monthly contribution reminder
+- July 1st, 9 AM — tax deadline alert (30 days before July 31)
+- January 1st, 8 AM — Vorabpauschale notice
+- Every Monday, 9 AM — weekly portfolio insight
 
 ---
 
-## Environment variables (.env)
+## Security
 
-```
-GEMINI_API_KEY=           ← from aistudio.google.com
-FIREBASE_PROJECT_ID=financialaiagent-809ee
-FIREBASE_SERVICE_ACCOUNT_PATH=./serviceAccount.json  ← optional
-AGENT_ENV=development
-AGENT_USER_ID=nitish_bidwe
-```
+- `.env` is listed in `.gitignore` and must **never** be committed
+- This agent is built for **personal use only** — no multi-user auth
+- Firebase service account JSON (if used) must also be excluded from git
+- See `.env.example` for the full list of required variables
 
 ---
 
-## Update your financial data
+## Links
 
-Edit `src/services/SeedData.ts` when:
-- Salary changes
-- New assets added
-- Goals change
-- bAV confirmed
-
-Then re-run `npm start` — agent fetches latest from Firestore.
+- GitHub: [https://github.com/Nytish/investment-agent](https://github.com/Nytish/investment-agent)
+- Gemini API keys: [aistudio.google.com](https://aistudio.google.com)
+- Firebase console: [console.firebase.google.com](https://console.firebase.google.com)

@@ -8,7 +8,18 @@
     "serve": "ts-node src/server.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "dev": "ts-node src/index.ts"
+    "dev": "ts-node src/index.ts",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": ["**/src/__tests__/**/*.test.ts"],
+    "moduleNameMapper": {
+      "^../services/FirestoreService$": "<rootDir>/src/__tests__/__mocks__/FirestoreService.ts",
+      "^../../services/FirestoreService$": "<rootDir>/src/__tests__/__mocks__/FirestoreService.ts"
+    }
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
@@ -22,7 +33,10 @@
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.12.0",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
   },
