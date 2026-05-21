@@ -14,20 +14,28 @@ import { SYSTEM_PROMPT } from "./prompts";
 import { TOOL_DECLARATIONS, executeTool } from "./tools";
 import { HOLDING_TOOL_DECLARATIONS, executeHoldingTool } from "./holdingTools";
 import { INSIGHT_TOOL_DECLARATIONS, executeInsightTool } from "./insightTools";
+import { NOTIFICATION_TOOL_DECLARATIONS, executeNotificationTool } from "./notificationTools";
+import { TAX_TOOL_DECLARATIONS, executeTaxTool } from "./taxTools";
 import { saveConversationMessage } from "../services/FirestoreService";
 import { NITISH_UID } from "../services/SeedData";
 
 const ALL_TOOL_DECLARATIONS = [
   ...TOOL_DECLARATIONS,
   ...HOLDING_TOOL_DECLARATIONS,
-  ...INSIGHT_TOOL_DECLARATIONS
+  ...INSIGHT_TOOL_DECLARATIONS,
+  ...NOTIFICATION_TOOL_DECLARATIONS,
+  ...TAX_TOOL_DECLARATIONS
 ];
 
 async function executeAnyTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   const holdingNames = HOLDING_TOOL_DECLARATIONS.map(t => t.name);
   const insightNames = INSIGHT_TOOL_DECLARATIONS.map(t => t.name);
+  const notifNames   = NOTIFICATION_TOOL_DECLARATIONS.map(t => t.name);
+  const taxNames     = TAX_TOOL_DECLARATIONS.map(t => t.name);
   if (holdingNames.includes(name)) return executeHoldingTool(name, args);
   if (insightNames.includes(name)) return executeInsightTool(name, args);
+  if (notifNames.includes(name))   return executeNotificationTool(name, args);
+  if (taxNames.includes(name))     return executeTaxTool(name, args);
   return executeTool(name, args);
 }
 

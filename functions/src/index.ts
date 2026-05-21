@@ -107,6 +107,99 @@ export const weeklyInsightReminder = onSchedule(
   }
 );
 
+// ── NT-03: Rebalancing check — every Saturday 10AM Berlin ──
+
+export const rebalancingCheck = onSchedule(
+  {
+    schedule: "0 10 * * 6",       // Every Saturday, 10:00 AM
+    timeZone: "Europe/Berlin",
+    region: "europe-west1"
+  },
+  async () => {
+    const portfolioDoc = await db
+      .collection("users").doc(NITISH_UID)
+      .collection("data").doc("portfolio")
+      .get();
+
+    if (!portfolioDoc.exists) return;
+
+    const portfolio = portfolioDoc.data()!;
+    const holdings: Array<{ ticker: string; value: number; assetClass: string }> = portfolio.holdings ?? [];
+
+    if (holdings.length === 0) return;
+
+    const totalValue = holdings.reduce((sum, h) => sum + h.value, 0);
+    if (totalValue === 0) return;
+
+    // Target allocations (balanced portfolio)
+    const targets: Record<string, number> = {
+      "VWCE": 55, "IS3N": 15, "GOLD": 10, "IWDP": 10, "CASH": 10
+    };
+
+    const drifts: string[] = [];
+    for (const holding of holdings) {
+      const ticker = holding.ticker?.toUpperCase() ?? "";
+      const target = targets[ticker];
+      if (target === undefined) continue;
+      const actual = (holding.value / totalValue) * 100;
+      const drift = Math.abs(actual - target);
+      if (drift > 5) {
+        const direction = actual > target ? "übergewichtet" : "untergewichtet";
+        drifts.push(`${ticker}: ${actual.toFixed(1)}% (Ziel ${target}%, ${direction} um ${drift.toFixed(1)}%)`);
+      }
+    }
+
+    if (drifts.length === 0) return;   // Portfolio on track — no notification
+
+    await saveNotification(NITISH_UID, {
+      type: "NT03_REBALANCE_NEEDED",
+      title: `Rebalancing empfohlen: ${drifts.length} Position(en) abgewichen`,
+      body: `Portfolio-Drift erkannt: ${drifts.join(", ")}. Rebalancing unter €2.000 Freistellungsauftrag prüfen.`,
+      actionLabel: "Rebalancing planen",
+      actionRoute: "/portfolio/rebalance"
+    });
+  }
+);
+
+// ── NT-01: Market drop monitor — weekdays 8AM Berlin ──
+
+export const marketDropMonitor = onSchedule(
+  {
+    schedule: "0 8 * * 1-5",      // Weekdays, 8:00 AM
+    timeZone: "Europe/Berlin",
+    region: "europe-west1"
+  },
+  async () => {
+    // Check for manually-triggered market alert
+    const alertDoc = await db
+      .collection("users").doc(NITISH_UID)
+      .collection("data").doc("marketAlert")
+      .get();
+
+    if (!alertDoc.exists) return;
+
+    const alert = alertDoc.data()!;
+    if (!alert.triggerDrop) return;
+
+    const dropPercent = alert.dropPercent ?? 5;
+    const indexName = alert.indexName ?? "MSCI World";
+
+    await saveNotification(NITISH_UID, {
+      type: "NT01_MARKET_DROP",
+      title: `Marktkorrektur: ${indexName} -${dropPercent}%`,
+      body: `${indexName} ist um ${dropPercent}% gefallen. Dein Sparplan läuft weiter — günstigere Einkaufspreise für VWCE. Nachkaufen? Rebalancing prüfen.`,
+      actionLabel: "Portfolio analysieren",
+      actionRoute: "/portfolio/analysis"
+    });
+
+    // Reset the trigger so it doesn't fire repeatedly
+    await db
+      .collection("users").doc(NITISH_UID)
+      .collection("data").doc("marketAlert")
+      .update({ triggerDrop: false, lastTriggeredAt: new Date().toISOString() });
+  }
+);
+
 // ── Helper functions ──────────────────────────────────────────
 
 async function saveNotification(
