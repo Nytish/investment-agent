@@ -12,8 +12,24 @@ import {
 import * as dotenv from "dotenv";
 import { SYSTEM_PROMPT } from "./prompts";
 import { TOOL_DECLARATIONS, executeTool } from "./tools";
+import { HOLDING_TOOL_DECLARATIONS, executeHoldingTool } from "./holdingTools";
+import { INSIGHT_TOOL_DECLARATIONS, executeInsightTool } from "./insightTools";
 import { saveConversationMessage } from "../services/FirestoreService";
 import { NITISH_UID } from "../services/SeedData";
+
+const ALL_TOOL_DECLARATIONS = [
+  ...TOOL_DECLARATIONS,
+  ...HOLDING_TOOL_DECLARATIONS,
+  ...INSIGHT_TOOL_DECLARATIONS
+];
+
+async function executeAnyTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+  const holdingNames = HOLDING_TOOL_DECLARATIONS.map(t => t.name);
+  const insightNames = INSIGHT_TOOL_DECLARATIONS.map(t => t.name);
+  if (holdingNames.includes(name)) return executeHoldingTool(name, args);
+  if (insightNames.includes(name)) return executeInsightTool(name, args);
+  return executeTool(name, args);
+}
 
 dotenv.config();
 
@@ -44,7 +60,7 @@ export class InvestmentAgent {
     const model = this.genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
       systemInstruction: SYSTEM_PROMPT,
-      tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+      tools: [{ functionDeclarations: ALL_TOOL_DECLARATIONS }],
       toolConfig: {
         functionCallingConfig: {
           mode: FunctionCallingMode.AUTO
@@ -107,7 +123,7 @@ export class InvestmentAgent {
       const toolResponses = await Promise.all(
         functionCalls.map(async (fc) => {
           this.toolsUsedInTurn.push(fc.name);
-          const toolResult = await executeTool(fc.name, fc.args as Record<string, unknown>);
+          const toolResult = await executeAnyTool(fc.name, fc.args as Record<string, unknown>);
           return {
             functionResponse: {
               name: fc.name,

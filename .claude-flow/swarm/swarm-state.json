@@ -1,0 +1,24 @@
+{
+  "swarms": {
+    "swarm-1779394947571-k32wcs": {
+      "swarmId": "swarm-1779394947571-k32wcs",
+      "topology": "hierarchical",
+      "maxAgents": 5,
+      "status": "running",
+      "agents": [],
+      "tasks": [],
+      "config": {
+        "topology": "hierarchical",
+        "maxAgents": 5,
+        "strategy": "specialized",
+        "communicationProtocol": "message-bus",
+        "autoScaling": true,
+        "consensusMechanism": "majority"
+      },
+      "createdAt": "2026-05-21T20:22:27.571Z",
+      "updatedAt": "2026-05-21T20:22:27.571Z",
+      "pid": 11221
+    }
+  },
+  "version": "3.0.0"
+}

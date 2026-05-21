@@ -22,3 +22,6 @@ firestore-debug.log
 # IDE
 .vscode/
 .idea/
+
+# CLI session state
+.session
