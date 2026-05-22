@@ -87,6 +87,25 @@ export class InvestmentAgent {
     this.sessionId = `session_${Date.now()}`;
   }
 
+  // Retry helper — handles 503 / 429 with exponential backoff
+  private async sendWithRetry(
+    fn: () => Promise<unknown>,
+    maxRetries = 3
+  ): Promise<unknown> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const msg = (err as Error).message ?? "";
+        const isRetryable = msg.includes("503") || msg.includes("429") || msg.includes("overloaded");
+        if (!isRetryable || attempt === maxRetries) throw err;
+        const delayMs = attempt * 2000; // 2s, 4s, 6s
+        console.log(`[agent] Gemini ${msg.includes("503") ? "503" : "429"} — retry ${attempt}/${maxRetries} in ${delayMs / 1000}s`);
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+    }
+  }
+
   // Send a message and get a response (handles tool calling loop)
   async chat_message(userMessage: string): Promise<AgentResponse> {
     if (!this.chat) {
@@ -102,7 +121,8 @@ export class InvestmentAgent {
       timestamp: new Date().toISOString()
     }).catch(() => { /* non-blocking */ });
 
-    let result = await this.chat!.sendMessage(userMessage);
+    const chat = this.chat!;
+    let result = await this.sendWithRetry(() => chat.sendMessage(userMessage)) as Awaited<ReturnType<typeof chat.sendMessage>>;
 
     // Tool-calling loop — keep running until Gemini gives a text response
     while (true) {
@@ -142,7 +162,7 @@ export class InvestmentAgent {
       );
 
       // Send tool results back to Gemini
-      result = await this.chat!.sendMessage(toolResponses);
+      result = await this.sendWithRetry(() => chat.sendMessage(toolResponses)) as Awaited<ReturnType<typeof chat.sendMessage>>;
     }
   }
 
