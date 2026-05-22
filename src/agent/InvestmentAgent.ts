@@ -1,14 +1,8 @@
 // ============================================================
-// InvestmentAgent — Gemini tool-calling loop
-// Orchestrates conversation + tool execution
+// InvestmentAgent — provider-agnostic tool-calling loop
+// Routes: gemini-2.5-flash → gemini-1.5-flash → qwen2.5:14b
 // ============================================================
 
-import {
-  GoogleGenerativeAI,
-  ChatSession,
-  FunctionCallingMode,
-  Content
-} from "@google/generative-ai";
 import * as dotenv from "dotenv";
 import { SYSTEM_PROMPT } from "./prompts";
 import { TOOL_DECLARATIONS, executeTool } from "./tools";
@@ -18,6 +12,10 @@ import { NOTIFICATION_TOOL_DECLARATIONS, executeNotificationTool } from "./notif
 import { TAX_TOOL_DECLARATIONS, executeTaxTool } from "./taxTools";
 import { saveConversationMessage } from "../services/FirestoreService";
 import { NITISH_UID } from "../services/SeedData";
+import { routeToModel } from "../providers/ModelRouter";
+import { UnifiedMessage } from "../providers/types";
+
+dotenv.config();
 
 const ALL_TOOL_DECLARATIONS = [
   ...TOOL_DECLARATIONS,
@@ -39,130 +37,92 @@ async function executeAnyTool(name: string, args: Record<string, unknown>): Prom
   return executeTool(name, args);
 }
 
-dotenv.config();
-
 export interface AgentResponse {
   text: string;
   toolsUsed: string[];
   sessionId: string;
+  modelUsed: string;
 }
 
 export class InvestmentAgent {
-  private genAI: GoogleGenerativeAI;
-  private chat: ChatSession | null = null;
+  private history: UnifiedMessage[] = [];
   private sessionId: string;
   private toolsUsedInTurn: string[] = [];
 
   constructor() {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY not set in .env file");
-    }
-
-    this.genAI = new GoogleGenerativeAI(apiKey);
     this.sessionId = `session_${Date.now()}`;
   }
 
-  // Start a new conversation session
-  startSession(priorHistory: Content[] = []): void {
-    const model = this.genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction: SYSTEM_PROMPT,
-      tools: [{ functionDeclarations: ALL_TOOL_DECLARATIONS }],
-      toolConfig: {
-        functionCallingConfig: {
-          mode: FunctionCallingMode.AUTO
-        }
-      },
-      generationConfig: {
-        temperature: 0.4,       // lower = more consistent financial advice
-        maxOutputTokens: 2048
-      }
-    });
-
-    this.chat = model.startChat({
-      history: priorHistory
-    });
-
+  // Keep startSession() for backward compatibility with index.ts (CLI)
+  startSession(): void {
+    this.history = [];
     this.sessionId = `session_${Date.now()}`;
   }
 
-  // Retry helper — handles 503 / 429 with exponential backoff
-  private async sendWithRetry(
-    fn: () => Promise<unknown>,
-    maxRetries = 3
-  ): Promise<unknown> {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        return await fn();
-      } catch (err) {
-        const msg = (err as Error).message ?? "";
-        const isRetryable = msg.includes("503") || msg.includes("429") || msg.includes("overloaded");
-        if (!isRetryable || attempt === maxRetries) throw err;
-        const delayMs = attempt * 2000; // 2s, 4s, 6s
-        console.log(`[agent] Gemini ${msg.includes("503") ? "503" : "429"} — retry ${attempt}/${maxRetries} in ${delayMs / 1000}s`);
-        await new Promise(r => setTimeout(r, delayMs));
-      }
-    }
-  }
-
-  // Send a message and get a response (handles tool calling loop)
   async chat_message(userMessage: string): Promise<AgentResponse> {
-    if (!this.chat) {
-      this.startSession();
-    }
-
     this.toolsUsedInTurn = [];
 
-    // Save user message to Firestore (fire-and-forget)
+    // Add user message to history
+    this.history.push({ role: "user", content: userMessage });
+
+    // Save to Firestore (fire-and-forget)
     saveConversationMessage(NITISH_UID, this.sessionId, {
       role: "user",
       content: userMessage,
       timestamp: new Date().toISOString()
     }).catch(() => { /* non-blocking */ });
 
-    const chat = this.chat!;
-    let result = await this.sendWithRetry(() => chat.sendMessage(userMessage)) as Awaited<ReturnType<typeof chat.sendMessage>>;
-
-    // Tool-calling loop — keep running until Gemini gives a text response
+    // Tool-calling loop
     while (true) {
-      const response = result.response;
-      const functionCalls = response.functionCalls();
+      const response = await routeToModel(this.history, ALL_TOOL_DECLARATIONS, SYSTEM_PROMPT);
 
-      if (!functionCalls || functionCalls.length === 0) {
-        // No more tool calls — final text response
-        const finalText = response.text();
+      if (!response.isToolCall) {
+        // Final text answer
+        this.history.push({ role: "assistant", content: response.text });
 
-        // Save agent response to Firestore
         saveConversationMessage(NITISH_UID, this.sessionId, {
           role: "model",
-          content: finalText,
+          content: response.text,
           timestamp: new Date().toISOString()
         }).catch(() => { /* non-blocking */ });
 
         return {
-          text: finalText,
+          text: response.text,
           toolsUsed: this.toolsUsedInTurn,
-          sessionId: this.sessionId
+          sessionId: this.sessionId,
+          modelUsed: response.modelUsed
         };
       }
 
-      // Execute all function calls in parallel
-      const toolResponses = await Promise.all(
-        functionCalls.map(async (fc) => {
-          this.toolsUsedInTurn.push(fc.name);
-          const toolResult = await executeAnyTool(fc.name, fc.args as Record<string, unknown>);
+      // Model requested tool calls — add to history
+      this.history.push({
+        role: "assistant",
+        content: "",
+        toolCalls: response.toolCalls
+      });
+
+      // Execute all tools in parallel
+      const toolResults = await Promise.all(
+        response.toolCalls.map(async (tc) => {
+          this.toolsUsedInTurn.push(tc.name);
+          const result = await executeAnyTool(tc.name, tc.args);
           return {
-            functionResponse: {
-              name: fc.name,
-              response: toolResult as Record<string, unknown>
-            }
+            toolCallId: tc.id,
+            toolName: tc.name,
+            content: JSON.stringify(result)
           };
         })
       );
 
-      // Send tool results back to Gemini
-      result = await this.sendWithRetry(() => chat.sendMessage(toolResponses)) as Awaited<ReturnType<typeof chat.sendMessage>>;
+      // Add tool results to history (individual messages — providers group as needed)
+      for (const tr of toolResults) {
+        this.history.push({
+          role: "tool_result",
+          content: tr.content,
+          toolCallId: tr.toolCallId,
+          toolName: tr.toolName
+        });
+      }
     }
   }
 
@@ -171,7 +131,7 @@ export class InvestmentAgent {
   }
 
   resetSession(): void {
-    this.chat = null;
+    this.history = [];
     this.sessionId = `session_${Date.now()}`;
   }
 }

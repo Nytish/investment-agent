@@ -278,6 +278,9 @@
       animation: fadeIn 0.2s ease;
     }
     @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } }
+    .model-cloud { color: #00c896; }
+    .model-local { color: #f59e0b; }
+    .model-unknown { color: #64748b; }
   </style>
 </head>
 <body>
@@ -288,7 +291,7 @@
     <div class="logo">📈</div>
     <div>
       <div class="header-title">AI Investment Co-pilot</div>
-      <div class="header-sub">Gemini 2.5 Flash · Firebase · Personal</div>
+      <div class="header-sub"><span id="modelBadge">Connecting...</span> · Firebase · Personal</div>
     </div>
   </div>
   <div class="header-right">
@@ -390,7 +393,7 @@
       localStorage.setItem('sessionId', sessionId);
 
       typingEl.remove();
-      appendMessage('agent', data.text, data.toolsUsed);
+      appendMessage('agent', data.text, data.toolsUsed, data.modelUsed);
 
     } catch (err) {
       typingEl.remove();
@@ -401,7 +404,7 @@
     }
   }
 
-  function appendMessage(role, text, toolsUsed = []) {
+  function appendMessage(role, text, toolsUsed = [], modelUsed = '') {
     const div = document.createElement('div');
     div.className = `msg ${role}`;
 
@@ -421,6 +424,14 @@
     }
 
     right.appendChild(bubble);
+
+    if (role === 'agent' && modelUsed) {
+      const modelDiv = document.createElement('div');
+      modelDiv.style.cssText = 'font-size:11px;color:#64748b;margin-top:4px;';
+      const isLocal = modelUsed.includes('qwen') || modelUsed.includes('llama') || modelUsed.includes('gemma');
+      modelDiv.textContent = (isLocal ? '⚡ ' : '☁️ ') + modelUsed;
+      right.appendChild(modelDiv);
+    }
 
     if (toolsUsed && toolsUsed.length > 0) {
       const toolsDiv = document.createElement('div');
@@ -499,6 +510,31 @@
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 4000);
   }
+
+  // Poll /api/status every 5s to show active model in header
+  async function pollModelStatus() {
+    try {
+      const res = await fetch('/api/status');
+      const data = await res.json();
+      const model = data.activeModel ?? 'unknown';
+      const badge = document.getElementById('modelBadge');
+      if (!badge) return;
+      if (model.includes('gemini')) {
+        badge.className = 'model-cloud';
+        badge.textContent = model;
+      } else if (model.includes('qwen') || model.includes('llama') || model.includes('gemma')) {
+        badge.className = 'model-local';
+        badge.textContent = '⚡ ' + model + ' (local)';
+      } else {
+        badge.className = 'model-unknown';
+        badge.textContent = 'Ready';
+      }
+    } catch {
+      // ignore
+    }
+  }
+  pollModelStatus();
+  setInterval(pollModelStatus, 5000);
 
   // Focus input on load
   window.addEventListener('load', () => inputEl.focus());

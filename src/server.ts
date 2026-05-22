@@ -10,6 +10,7 @@ import * as path from "path";
 import * as dotenv from "dotenv";
 import { InvestmentAgent } from "./agent/InvestmentAgent";
 import { initFirebase } from "./services/FirestoreService";
+import { lastModelUsed } from "./providers/ModelRouter";
 
 dotenv.config();
 
@@ -52,7 +53,8 @@ app.post("/api/chat", async (req: Request, res: Response) => {
     res.json({
       text: response.text,
       toolsUsed: response.toolsUsed,
-      sessionId: sid
+      sessionId: sid,
+      modelUsed: response.modelUsed
     });
   } catch (err) {
     const error = err as Error;
@@ -77,12 +79,26 @@ app.get("/api/status", (_req: Request, res: Response) => {
     status: "ok",
     activeSessions: sessions.size,
     model: "gemini-2.5-flash",
+    activeModel: lastModelUsed,
     timestamp: new Date().toISOString()
   });
 });
 
+// ── GET /api/health ────────────────────────────────────────────
+app.get("/api/health", (_req: Request, res: Response) => {
+  const hasGeminiKey = !!process.env.GEMINI_API_KEY;
+  res.json({
+    status: hasGeminiKey ? "ok" : "degraded",
+    checks: {
+      geminiApiKey: hasGeminiKey ? "present" : "missing",
+      activeSessions: sessions.size,
+      uptime: Math.round(process.uptime()) + "s"
+    }
+  });
+});
+
 // ── Catch-all → serve index.html ──────────────────────────────
-app.get("*", (_req: Request, res: Response) => {
+app.get("/{*path}", (_req: Request, res: Response) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
