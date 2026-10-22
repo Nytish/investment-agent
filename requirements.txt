@@ -25,3 +25,7 @@ apscheduler>=3.10.4
 
 # YAML loader (basic profile reading)
 PyYAML>=6.0.1
+
+# Gmail OAuth2 alerts (optional — only needed if configuring email alerts)
+# Install with: pip install -r requirements-gmail.txt
+# See docs/GMAIL_SETUP.md

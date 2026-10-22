@@ -12,5 +12,8 @@ __pycache__/
 *.pyc
 .env
 .venv/
+# Gmail OAuth — never commit these
+data/gmail_credentials.json
+data/gmail_token.json
 *.egg-info/
 /tmp/apex_checkpoint.json
