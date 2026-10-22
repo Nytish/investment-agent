@@ -83,7 +83,8 @@ price = 123.45
 | Sparer-Pauschbetrag | **€2,000** (married, Steuerklasse III) | CRITICAL: not €1,000 |
 | Abgeltungsteuer | 26.375% (incl. Soli) | |
 | FIRE target | €600,000 by age 47 | |
-| Steuererklärung 2024 | NOT FILED — urgent | |
+| Steuererklärung 2024 | FILED ✅ | |
+| Steuererklärung 2025 | FILED ✅ | |
 | Freistellungsauftrag | NOT filed with Scalable Capital | |
 
 ---
