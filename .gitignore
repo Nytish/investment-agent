@@ -1,0 +1,16 @@
+# APEX 2.0 — keep ALL private financial data out of version control
+data/financial_profile.yaml
+data/conversations.db
+data/market_cache.db
+data/journal.db
+data/*.db
+data/*.db-shm
+data/*.db-wal
+reports/
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+.venv/
+*.egg-info/
+/tmp/apex_checkpoint.json
