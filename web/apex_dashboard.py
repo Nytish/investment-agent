@@ -385,8 +385,8 @@ if _prompt := st.chat_input("Ask APEX about your investments, taxes, FIRE plan�
                 _reply = (
                     f"⚠️ No LLM provider available: {_e}\n\n"
                     "**To enable chat:**\n"
-                    "- Mac Mini M4: `ollama run qwen3.8b:27b`\n"
-                    "- Linux: `ollama run qwen3:8b`\n"
+                    "- Mac Mini M4: `ollama run qwen2.5:14b-instruct-q4_K_M`\n"
+                    "- Fast fallback: `ollama run qwen2.5:3b`\n"
                     "- Cloud: `export GEMINI_API_KEY=your_key`"
                 )
             except Exception as _e:

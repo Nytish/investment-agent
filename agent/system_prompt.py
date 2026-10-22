@@ -31,6 +31,7 @@ def build_system_prompt(profile: dict, market_snapshot: str = "") -> str:
     )
 
     return f"""You are APEX, Nitish's personal investment mentor for Germany.
+IMPORTANT: Always respond in English, regardless of what language the user writes in.
 
 ## Nitish's Profile
 - Age: 36, Ingolstadt, Germany. Sole earner, family of 3.
