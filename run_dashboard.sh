@@ -5,6 +5,11 @@
 
 cd "$(dirname "$0")"
 
+# Activate virtual environment if present
+if [ -f .venv/bin/activate ]; then
+  source .venv/bin/activate
+fi
+
 # Load .env if it exists
 if [ -f .env ]; then
   export $(grep -v '^#' .env | xargs)
