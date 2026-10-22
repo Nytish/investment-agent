@@ -2,10 +2,10 @@
 model_router.py — LLM provider fallback chain for APEX agent layer.
 
 Priority order (local-first for privacy):
-  1. Ollama qwen3.8b:27b  (Mac Mini M4, 24GB unified memory)
-  2. Ollama qwen3:8b      (Linux fallback, 8GB VRAM)
-  3. Gemini 2.5 Flash     (cloud fallback)
-  4. Gemini 1.5 Flash     (secondary cloud)
+  1. Ollama qwen2.5:14b-instruct-q4_K_M  (Mac Mini M4, 16GB unified memory — primary)
+  2. Ollama qwen2.5:3b                   (fast local fallback, ~2GB)
+  3. Gemini 2.5 Flash                    (cloud fallback)
+  4. Gemini 1.5 Flash                    (secondary cloud)
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ class LLMProvider(Protocol):
 
 @dataclass
 class OllamaProvider:
-    model: str = "qwen3:8b"
+    model: str = "qwen2.5:14b-instruct-q4_K_M"
     base_url: str = "http://localhost:11434"
 
     @property
@@ -98,10 +98,10 @@ class ModelRouter:
     """Try providers in priority order. First available and responsive wins."""
 
     DEFAULT_PROVIDERS: list[LLMProvider] = [
-        OllamaProvider("qwen3.8b:27b"),      # Mac Mini M4 — primary, private
-        OllamaProvider("qwen3:8b"),           # Linux 8GB VRAM fallback
-        GeminiProvider("gemini-2.5-flash"),   # cloud fallback
-        GeminiProvider("gemini-1.5-flash"),   # secondary cloud
+        OllamaProvider("qwen2.5:14b-instruct-q4_K_M"),  # Mac Mini M4 16GB — primary, private
+        OllamaProvider("qwen2.5:3b"),                    # fast local fallback, ~2GB
+        GeminiProvider("gemini-2.5-flash"),              # cloud fallback
+        GeminiProvider("gemini-1.5-flash"),              # secondary cloud
     ]
 
     def __init__(self, providers: list[LLMProvider] | None = None) -> None:
@@ -126,5 +126,5 @@ class ModelRouter:
         detail = f": {last_error}" if last_error else ""
         raise RuntimeError(
             f"No LLM provider available{detail}. "
-            "Start Ollama (`ollama run qwen3:8b`) or set GEMINI_API_KEY."
+            "Start Ollama (`ollama run qwen2.5:14b-instruct-q4_K_M`) or set GEMINI_API_KEY."
         )

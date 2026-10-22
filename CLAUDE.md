@@ -151,9 +151,14 @@ python -m pytest tests/test_X.py   # single file
 ## MODEL (when running agent layer)
 
 ```
-Primary:   Ollama qwen3.8:27b-mlx    (Mac Mini M4, 24GB unified memory)
-Fallback:  Gemini 2.5 Flash          (cloud, GEMINI_API_KEY env var)
-Fallback2: Gemini 1.5 Flash          (secondary cloud)
+Primary:   Ollama qwen2.5:14b-instruct-q4_K_M  (Mac Mini M4, 16GB unified memory — ~8.5GB)
+Fallback:  Ollama qwen2.5:3b                   (fast local fallback, ~2GB)
+Fallback2: Gemini 2.5 Flash                    (cloud, GEMINI_API_KEY env var)
+Fallback3: Gemini 1.5 Flash                    (secondary cloud)
 ```
 
-Linux machine (RTX 2000 Ada, 8GB VRAM) → use `qwen3:8b` instead (fits in 8GB).
+Pull commands:
+```bash
+ollama pull qwen2.5:14b-instruct-q4_K_M
+ollama pull qwen2.5:3b
+```
