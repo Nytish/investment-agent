@@ -1,164 +1,118 @@
-# APEX 2.0 — Claude Code Session Instructions
+# INMarket — AI Investment Agent
 
-**Project:** Personal Investment Mentor for Nitish Bidwe  
-**Owner:** nitish.bidwe@gmail.com  
-**Location:** /home/claude/apex2/ (dev) | GitHub (canonical)
+**Owner:** Nitish Bidwe (nitish.bidwe@gmail.com)  
+**Stack:** FastAPI + Gemini 2.5 Flash + yfinance + Chart.js  
+**Run:** `./start.sh` → `http://localhost:8000`
 
 ---
 
-## START OF EVERY SESSION
+## QUICK START
 
 ```bash
-cd /home/claude/apex2
-python -m pytest tests/ -v        # must be green before any new work
-python handoff.py --summary       # see current state
+cp .env.example .env          # add GEMINI_API_KEY
+./start.sh                    # installs deps, starts server
+# → open http://localhost:8000
 ```
 
-If resuming from a checkpoint:
+Or manually:
 ```bash
-python handoff.py --restore /tmp/apex_checkpoint.json
+pip install -r requirements.txt
+python main.py
 ```
 
 ---
 
-## RELAY MODE (context window protocol)
-
-When your context usage reaches ~50%, proactively run:
-```bash
-python handoff.py --checkpoint
-```
-This writes `/tmp/apex_checkpoint.json` with full project state. Tell the user the checkpoint path so Session B can resume cleanly. See `HANDOFF.md` for the full protocol.
-
----
-
-## ARCHITECTURE (6 layers)
+## ARCHITECTURE
 
 ```
-Layer 6 — web/apex_dashboard.py       (Streamlit)
-Layer 5 — agent/model_router.py       (Ollama qwen3.8:27b-mlx → Gemini 2.5 Flash)
-Layer 4 — core/market_feed.py         (yfinance + Bundesbank + ECB + RSS)
-Layer 3 — notify/scheduler.py         (Gmail MCP, APScheduler, 7 alert types)
-Layer 2 — core/                        (policy, cashflow, buckets, tax_engine,
-                                        monte_carlo, gap_analysis, etf_catalogue, portfolio)
-Layer 1 — data/                        (financial_profile.yaml, journal.db, market_cache.db)
+main.py                      FastAPI app, all API routes, serves web/index.html
+core/
+  profile.py                 Hardcoded financial profile (no YAML dependency)
+  gemini_client.py           Gemini 2.5 Flash client, streaming + single-shot
+  market_data.py             Live ETF quotes and history via yfinance
+  fire_calc.py               Monte Carlo FIRE projections (1,000 simulations)
+  alerts.py                  Buy signal detection, action item alerts
+  risk.py                    Volatility, Sharpe ratio, drawdown metrics
+web/
+  index.html                 Single-page app (dark theme, Chart.js charts)
+data/                        Gitignored — no files committed here
 ```
 
----
-
-## SECURITY — NEVER VIOLATE
-
-- `data/financial_profile.yaml` — **NEVER commit** (gitignored, contains personal finance data)
-- `.env` — **NEVER commit** (contains API keys)
-- No hardcoded API keys — use env vars: `GEMINI_API_KEY`, etc.
-- Bundesbank and ECB APIs are public, no key needed
-
----
-
-## DECIMAL RULE
-
-**All monetary values use `decimal.Decimal`, never `float`.**  
-This is non-negotiable. The tax engine and cashflow engine depend on exact arithmetic.
-
-```python
-# CORRECT
-from decimal import Decimal
-price = Decimal("123.45")
-
-# WRONG — introduces float imprecision
-price = 123.45
-```
+**API endpoints:**
+- `GET /api/profile` — financial profile snapshot
+- `GET /api/quotes` — live ETF prices (VWCE, IWDA, IS3N, IEAG, IWDP)
+- `GET /api/history/{ticker}?period=1y` — price history for charts
+- `GET /api/alerts` — buy signals and action items
+- `GET /api/fire?monthly=500` — Monte Carlo FIRE projection
+- `GET /api/fire/scenarios` — 3-scenario comparison (€300/€500/€1000)
+- `GET /api/risk` — risk metrics for all ETFs
+- `POST /api/chat` — SSE streaming chat with Gemini
+- `GET /api/briefing` — AI-generated daily briefing
+- `GET /` — serves the SPA
 
 ---
 
-## KEY FINANCIAL FACTS (do not hallucinate, use these)
-
-| Fact | Value | Status |
-|------|-------|--------|
-| Net monthly income | €4,315.34 | UNVERIFIED |
-| Kindergeld | €259/month | CONFIRMED |
-| Monthly expenses | ~€1,800 listed | INCOMPLETE — unlisted expenses exist |
-| Monthly surplus | ~€2,515 | UNVERIFIED |
-| Emergency savings | €50,000 Scalable Capital @ 2.5% | CONFIRMED |
-| Emergency savings rule | **NEVER INVEST — locked as emergency buffer** | |
-| Sparer-Pauschbetrag | **€2,000** (married, Steuerklasse III) | CRITICAL: not €1,000 |
-| Abgeltungsteuer | 26.375% (incl. Soli) | |
-| FIRE target | €600,000 by age 47 | |
-| Steuererklärung 2024 | FILED ✅ | |
-| Steuererklärung 2025 | FILED ✅ | |
-| Freistellungsauftrag | NOT filed with Scalable Capital | |
-
----
-
-## ETF TICKERS
+## ETF UNIVERSE (only these — no others)
 
 ```python
 ETF_TICKERS = {
-    "VWCE": "VWCE.DE",    # Vanguard FTSE All-World — global equity (primary)
-    "IWDA": "IWDA.AS",    # iShares MSCI World (Amsterdam, more liquid)
-    "IS3N": "IS3N.DE",    # iShares MSCI EM — Emerging Markets
-    "IEAG": "IEAG.DE",    # iShares EUR Aggregate Bond
-    "IWDP": "IWDP.DE",    # iShares Developed Market Property
+    "VWCE": "VWCE.DE",   # Vanguard FTSE All-World — primary holding
+    "IWDA": "IWDA.AS",   # iShares MSCI World — developed markets
+    "IS3N": "IS3N.DE",   # iShares MSCI EM — emerging markets
+    "IEAG": "IEAG.DE",   # iShares EUR Aggregate Bond — bonds
+    "IWDP": "IWDP.DE",   # iShares Developed Property — real estate
 }
 ```
 
 ---
 
-## BUILD PHASES (status tracked in handoff.py)
+## KEY FINANCIAL FACTS (hardcoded in core/profile.py — do not hallucinate)
 
-| Phase | Module | Status |
-|-------|--------|--------|
-| 0 | Bug fixes: sparer_pauschbetrag €2K, cashflow, policy | ✅ Done |
-| 1 | `core/tax_engine.py` — Vorabpauschale, Abgeltungsteuer | ⬜ Next |
-| 2 | `core/gap_analysis.py` — home purchase gap analysis | ⬜ |
-| 3 | `core/monte_carlo.py` — 1000 sim, P5/P25/P50/P75, FIRE | ⬜ |
-| 4 | `core/market_feed.py` — yfinance + Bundesbank + ECB | ✅ Done |
-| 4b | `core/etf_catalogue.py` — 6 ETFs metadata | ⬜ |
-| 5 | `notify/scheduler.py` — opportunity scanner + Gmail | ⬜ |
-| 6 | `web/apex_dashboard.py` — Streamlit dashboard | ⬜ |
-| 7 | `agent/model_router.py` — Ollama/Gemini routing | ⬜ |
-
----
-
-## TESTING
-
-```bash
-python -m pytest tests/ -v          # all tests
-python -m pytest tests/test_X.py   # single file
-```
-
-- **Never hit real network in tests** — mock yfinance, Bundesbank, ECB
-- One test file per module: `tests/test_market_feed.py`, `tests/test_tax_engine.py`, etc.
-- Tests use `tmp_path` fixture for SQLite — never write to `data/` in tests
+| Fact | Value |
+|------|-------|
+| Net monthly income | €4,315.34 |
+| Kindergeld | €259/month |
+| Monthly expenses | ~€1,800 (estimate — unlisted expenses exist) |
+| Monthly surplus | ~€2,574 |
+| Emergency buffer | **€50,000 Scalable Capital @ 2.5% — NEVER invest** |
+| Sparer-Pauschbetrag | **€2,000** (married, Steuerklasse III — NOT €1,000) |
+| Abgeltungsteuer | 26.375% (25% + 5.5% Soli) |
+| FIRE target | €600,000 |
+| ETF invested | €0 (not started) |
+| Freistellungsauftrag | NOT filed with Scalable Capital |
+| Steuererklärung 2024 | FILED ✅ |
+| Steuererklärung 2025 | FILED ✅ |
 
 ---
 
-## OPEN BUGS (check with `python handoff.py --summary`)
+## SECURITY — NEVER VIOLATE
 
-- **BUG-002**: `report.py` line ~155 hardcodes `72000` for down-payment shortfall → read from profile
+- `.env` — **NEVER commit** (contains GEMINI_API_KEY)
+- `data/` — **NEVER commit** (gitignored)
+- No hardcoded API keys anywhere — only `os.getenv("GEMINI_API_KEY")`
+- Do NOT put internal codenames or personal IDs in any public document
+
+---
+
+## DEVELOPMENT NOTES
+
+- Profile data lives in `core/profile.py` as a frozen dataclass — no YAML file needed
+- yfinance quotes are fetched live (no cache) on every `/api/quotes` call
+- History is cached 1 hour in-process to avoid hammering yfinance
+- Gemini streaming uses SSE — each chunk is `data: {"chunk": "text"}\n\n`
+- The SPA is a single `web/index.html` file — no build step, no npm
+- Monte Carlo uses a fixed seed (42) for reproducible results
 
 ---
 
 ## DO NOT
 
-- Do NOT put JIRA tickets, internal project codenames in any public document
-- Do NOT hallucinate financial values — if unsure, ask
-- Do NOT use `float` for money
-- Do NOT commit `data/financial_profile.yaml`
-- Do NOT invest the €50K emergency buffer — it is locked
+- Do NOT use `float` for production monetary calculations — extend to `Decimal` if needed
+- Do NOT add new ETFs outside the approved universe
+- Do NOT invest or recommend touching the €50K Tagesgeld emergency buffer
+- Do NOT hallucinate financial values — check `core/profile.py` for exact numbers
+- Do NOT add YAML/JSON config files — profile stays hardcoded in Python
 
 ---
 
-## MODEL (when running agent layer)
-
-```
-Primary:   Ollama qwen2.5:14b-instruct-q4_K_M  (Mac Mini M4, 16GB unified memory — ~8.5GB)
-Fallback:  Ollama qwen2.5:3b                   (fast local fallback, ~2GB)
-Fallback2: Gemini 2.5 Flash                    (cloud, GEMINI_API_KEY env var)
-Fallback3: Gemini 1.5 Flash                    (secondary cloud)
-```
-
-Pull commands:
-```bash
-ollama pull qwen2.5:14b-instruct-q4_K_M
-ollama pull qwen2.5:3b
-```
+*Last updated: October 2026 | Rebuild from APEX 2.0 (scrapped)*
